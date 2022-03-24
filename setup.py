@@ -8,5 +8,5 @@ setup(
     url='https://github.com/nyaoouo/Farsa',
     license='GPLv3',
     author='Nyaoouo',
-    author_email='-',
+    author_email='x@y.z',
 )
