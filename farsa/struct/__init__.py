@@ -1,5 +1,5 @@
 import ctypes
-from .base import MemStruct, Field,field, init_mem_struct
+from .base import MemStruct, Field, field, init_mem_struct, VTableFunc, ClassFunc, bit_mask, CFunc, Enum, Enumerate, init_enum
 from .remote import to_remote_type, RemoteMemStruct
 
 

@@ -1,8 +1,10 @@
 import ctypes
+import os
 from functools import cached_property
 from inspect import isclass
 from typing import TypeVar, Type, Tuple
-import pefile
+from chardet import detect
+from .pefile import PE
 from .winapi import kernel32, structure
 from .utils import process, memory, network, injection
 from .struct.remote import Remote, to_remote_type, RemoteMemStruct
@@ -30,11 +32,11 @@ class ModuleInfo:
 
     @cached_property
     def pe(self):
-        return pefile.PE(self._module_info.filename, fast_load=True)
+        return PE(self.file_path, fast_load=True)
 
     @cached_property
-    def file_path(self) -> bytes:
-        return self._module_info.filename
+    def file_path(self) -> str:
+        return self._module_info.filename.decode(detect(self._module_info.filename)['encoding'])
 
     @property
     def base_address(self) -> int:
@@ -46,8 +48,10 @@ class ModuleInfo:
 
 
 class Process:
-    def __init__(self, pid: int):
+    def __init__(self, pid: int = None):
+        if pid is None: pid = os.getpid()
         self.pid = pid
+        self.handle = None
         self.handle = kernel32.OpenProcess(structure.PROCESS.PROCESS_ALL_ACCESS.value, False, pid)
         if not self.handle: raise WinAPIError(kernel32.GetLastError(), 'OpenProcess')
         is_wow_64 = process.process_is_wow64(self.handle)
@@ -62,7 +66,8 @@ class Process:
         return cls(process.get_pid_by_name(process_name))
 
     def __del__(self):
-        kernel32.CloseHandle(self.handle)
+        if self.handle:
+            kernel32.CloseHandle(self.handle)
 
     def get_module_info(self, module_name: bytes) -> ModuleInfo:
         if module_name not in self._module_info_cache:
@@ -82,7 +87,7 @@ class Process:
         return self.write(*item, value)
 
     def read(self, d_type: Type[_t], address: int) -> _t:
-        _d_type = to_remote_type(d_type)
+        _d_type = to_remote_type(d_type,True)
         if isclass(_d_type) and issubclass(_d_type, RemoteMemStruct):
             return _d_type(remote=Remote(self, address))
         return memory.read_memory(self.handle, d_type, address)

@@ -2,7 +2,7 @@ import _ctypes
 import ctypes
 from inspect import isclass
 from typing import TypeVar, TYPE_CHECKING, Type
-from farsa.struct.base import MemStruct, Field, field_sort
+from farsa.struct.base import MemStruct, Field, get_data, ShiftField, Enum
 from farsa.winapi import kernel32, structure
 from ..exception import WinAPIError
 
@@ -21,19 +21,19 @@ class Remote:
         return Remote(self.process, address or self.address)
 
 
-class RemoteField:
-    def __init__(self, d_type: Type[_t], offset: int, key=''):
-        self.d_type = d_type
-        self.offset = offset
+class RemoteField(Field):
+    def __init__(self, d_type: Type[_t] | str, offset: int):
+        super().__init__(d_type, offset)
         self.is_remote_type = isclass(d_type) and issubclass(d_type, RemoteMemStruct)
-        self.key = key
 
     def __get__(self, instance: 'RemoteMemStruct', owner) -> _t:
         if instance is None: return self
         address = instance.remote.address + self.offset
         if self.is_remote_type:
-            return self.d_type(remote=instance.remote.copy(address))
-        # print(f"read {address:x} from {ctypes.addressof(instance) + self.offset:x} by type {self.d_type}")
+            try:
+                return self.d_type(remote=instance.remote.copy(address))
+            except TypeError:
+                pass
         if kernel32.ReadProcessMemory(
                 instance.remote.process.handle,
                 address,
@@ -41,14 +41,46 @@ class RemoteField:
                 ctypes.sizeof(self.d_type),
                 None
         ):
-            return getattr(instance, self.key)
+            return Field.__get__(self, instance, owner)
         raise WinAPIError(kernel32.GetLastError(), "ReadProcessMemory")
 
     def __set__(self, instance: 'RemoteMemStruct', value: _t) -> None:
         if instance is None: return
         if isinstance(value, RemoteMemStruct):
             update_remote_struct_buffer(value)
-        setattr(instance, self.key, value)
+        Field.__set__(self, instance, value)
+        # print(f"write {instance.remote.address + self.offset:x} from {ctypes.addressof(instance) + self.offset:x}")
+        if not kernel32.WriteProcessMemory(
+                instance.remote.process.handle,
+                instance.remote.address + self.offset,
+                ctypes.addressof(instance) + self.offset,
+                ctypes.sizeof(self.d_type),
+                None
+        ):
+            raise WinAPIError(kernel32.GetLastError(), "WriteProcessMemory")
+
+
+class RemoteShiftField(ShiftField):
+    def __init__(self, d_type: Type[_t] | str, offset: int, shifts: int):
+        super().__init__(d_type, offset, shifts)
+        self.is_remote_type = isclass(d_type) and issubclass(d_type, RemoteMemStruct)
+
+    def __get__(self, instance: 'RemoteMemStruct', owner) -> _t:
+        if instance is None: return self
+        address = instance.remote.address + self.offset
+        if kernel32.ReadProcessMemory(
+                instance.remote.process.handle,
+                address,
+                ctypes.addressof(instance) + self.offset,
+                ctypes.sizeof(self.d_type),
+                None
+        ):
+            return ShiftField.__get__(self, instance, owner)
+        raise WinAPIError(kernel32.GetLastError(), "ReadProcessMemory")
+
+    def __set__(self, instance: 'RemoteMemStruct', value: _t) -> None:
+        if instance is None: return
+        ShiftField.__set__(self, instance, value)
         # print(f"write {instance.remote.address + self.offset:x} from {ctypes.addressof(instance) + self.offset:x}")
         if not kernel32.WriteProcessMemory(
                 instance.remote.process.handle,
@@ -62,13 +94,18 @@ class RemoteField:
 
 class RemoteMemStruct(MemStruct):
     def __init__(self, *args, remote: Remote, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self.remote = remote
+
+    def __rshift__(self, other):
+        r= self.remote.process.read(other, self.remote.address)
+        print(type(r))
+        return r
 
 
 class RemotePointer(RemoteMemStruct):
     _fields_ = [('_address', structure.c_address)]
-    address = RemoteField(structure.c_address, 0, '_address')
+    address = RemoteField(structure.c_address, 0)
     _type_: Type[_t]
 
     def __init__(self, remote: Remote):
@@ -92,6 +129,9 @@ class RemotePointer(RemoteMemStruct):
     def __bool__(self):
         return bool(self.address)
 
+    # def _get_data(self, max_lv=10, lv=0):
+    #     if self.address: return get_data(self[0], max_lv, lv)
+
 
 class RemoteArray(RemoteMemStruct):
     _fields_: Field  # need to be defined when init
@@ -108,7 +148,7 @@ class RemoteArray(RemoteMemStruct):
                     ctypes.sizeof(self._type_),
                     None
             ):
-                d = getattr(self, f'_buf_{item}')
+                d = self.remote.process.read(self._type_, address)
                 if isinstance(d, RemoteMemStruct):
                     d.remote = self.remote.copy(address)
                 return d
@@ -144,10 +184,13 @@ class RemoteArray(RemoteMemStruct):
     @classmethod
     def create_cls(cls, t: Type[_t], size: int):
         return type(f'{cls.__name__}_{t.__name__}', (cls,), {
-            '_fields_': [('_buf_' + str(i), t) for i in range(size)],
+            '_fields_': [('_buf_', t * size)],
             '_type_': t,
             '_length_': size
         })
+
+    def _get_data(self, max_lv=10, lv=0):
+        return [get_data(self[i], max_lv, lv) for i in range(self._length_)]
 
 
 def update_remote_struct_buffer(remote_struct: RemoteMemStruct):
@@ -161,21 +204,25 @@ def update_remote_struct_buffer(remote_struct: RemoteMemStruct):
         raise WinAPIError(kernel32.GetLastError(), "ReadProcessMemory")
 
 
-def to_remote_type(t: Type[_t]) -> Type[_t]:
+def to_remote_type(t: Type[_t], force_array=False) -> Type[_t]:
     if isclass(t):
         if issubclass(t, RemoteMemStruct):
             return t
         elif issubclass(t, _ctypes.Array):
+            if not force_array and not issubclass(t._type_, (MemStruct, _ctypes.Array, _ctypes._Pointer)): return t
             return RemoteArray.create_cls(to_remote_type(t._type_), t._length_)
         elif issubclass(t, _ctypes._Pointer):
             return type(t.__name__, (RemotePointer,), {'_type_': to_remote_type(t._type_)})
         elif issubclass(t, MemStruct):
-            attrs = {}
-            for k in dir(t):
-                v = getattr(t, k)
-                if isinstance(v, Field): attrs[k] = RemoteField(to_remote_type(v.d_type), v.offset, v.key)
-            set_fields, field_names = field_sort(sorted(attrs.items(), key=lambda x: x[1].offset), RemoteField)
-            attrs['set_fields'] = set_fields
-            attrs['field_names'] = field_names
-            return type(t.__name__, (t, RemoteMemStruct), attrs)
+            remote_key = f'__remote_type_{hash(t)}__'
+            if not hasattr(t, remote_key):
+                n_t = type(f'r_{t.__name__}', (t, RemoteMemStruct), {})
+                setattr(t, remote_key, n_t)
+                for k in dir(t):
+                    v = getattr(t, k)
+                    if isinstance(v, ShiftField):
+                        setattr(n_t, k, RemoteShiftField(v.d_type, v.offset, v.shifts))
+                    elif isinstance(v, Field):
+                        setattr(n_t, k, RemoteField(to_remote_type(v.d_type), v.offset))
+            return getattr(t,remote_key)
     return t

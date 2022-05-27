@@ -20,4 +20,7 @@ def find_process_tcp_connections(pid: int):
     ): raise RuntimeError('GetExtendedTcpTable failed')
     for t in table.table:
         if t.owning_pid == pid:
-            yield ipaddress.IPv4Address(socket.ntohl(t.local_addr)), t.local_port, ipaddress.IPv4Address(socket.ntohl(t.remote_addr)), t.remote_port
+            yield ipaddress.IPv4Address(socket.ntohl(t.local_addr)), \
+                  socket.ntohs(t.local_port), \
+                  ipaddress.IPv4Address(socket.ntohl(t.remote_addr)), \
+                  socket.ntohs(t.remote_port)
