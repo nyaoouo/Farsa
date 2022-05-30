@@ -98,8 +98,8 @@ class RemoteMemStruct(MemStruct):
         self.remote = remote
 
     def __rshift__(self, other):
-        r= self.remote.process.read(other, self.remote.address)
-        print(type(r))
+        r = self.remote.process.read(other, self.remote.address)
+        # print(type(r))
         return r
 
 
@@ -112,6 +112,29 @@ class RemotePointer(RemoteMemStruct):
         super().__init__(remote=remote)
         self._address = remote.address
 
+        if issubclass(self._type_, Enum):
+            self._mode = 1
+        elif issubclass(self._type_, _ctypes.Array):
+            if self._type_._type_ == ctypes.c_char or self._type_._type_ == ctypes.c_wchar:
+                self._mode = 2
+            else:
+                self._mode = 3
+        else:
+            self._mode = 0
+
+    def iter_till_trim(self):
+        i = 0
+        while True:
+            try:
+                yield self[i]
+            except Exception as e:
+                break
+            i += 1
+
+    def get_value(self):
+        return list(self.iter_till_trim())
+
+
     def __getitem__(self, item) -> _t:
         if isinstance(item, int):
             address = self.address
@@ -121,6 +144,8 @@ class RemotePointer(RemoteMemStruct):
             if isinstance(d, RemoteMemStruct):
                 d.remote = self.remote.copy(address)
             return d
+        elif isinstance(item, slice):
+            return [self[i] for i in range(*item.indices(item.stop))]
         raise TypeError("Only integer indexing is supported")
 
     def __setitem__(self, key, value):
@@ -129,8 +154,11 @@ class RemotePointer(RemoteMemStruct):
     def __bool__(self):
         return bool(self.address)
 
-    # def _get_data(self, max_lv=10, lv=0):
-    #     if self.address: return get_data(self[0], max_lv, lv)
+    def __repr__(self):
+        return f"<RemotePointer {self.address:x}>"
+
+    def _get_data(self, max_lv=10, lv=0):
+        return self.__repr__()
 
 
 class RemoteArray(RemoteMemStruct):
@@ -224,5 +252,5 @@ def to_remote_type(t: Type[_t], force_array=False) -> Type[_t]:
                         setattr(n_t, k, RemoteShiftField(v.d_type, v.offset, v.shifts))
                     elif isinstance(v, Field):
                         setattr(n_t, k, RemoteField(to_remote_type(v.d_type), v.offset))
-            return getattr(t,remote_key)
+            return getattr(t, remote_key)
     return t

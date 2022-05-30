@@ -18,6 +18,17 @@ NtQueryInformationThread.argtypes = [
     ctypes.POINTER(ctypes.c_ulong)
 ]
 
+PROCESSINFOCLASS  = ctypes.c_ulong
+NtQueryInformationProcess = dll.NtQueryInformationProcess
+NtQueryInformationProcess.restype = NTSTATUS
+NtQueryInformationProcess.argtypes = [
+    ctypes.c_void_p,
+    THREADINFOCLASS,
+    ctypes.c_void_p,
+    ctypes.c_ulong,
+    ctypes.POINTER(ctypes.c_ulong)
+]
+
 NtQuerySystemInformation = dll.NtQuerySystemInformation
 NtQuerySystemInformation.restype = NTSTATUS
 NtQuerySystemInformation.argtypes = [

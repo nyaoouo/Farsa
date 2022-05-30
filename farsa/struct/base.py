@@ -105,6 +105,8 @@ class Field:
                 elif ctypes.sizeof(self._real_d_type._type_) == 1:
                     self._real_d_type = ctypes.c_char * ctypes.sizeof(self._real_d_type)
                     self._mode = 2
+                else:
+                    self._mode = 3
             else:
                 self._mode = 0
         return self._real_d_type
@@ -343,9 +345,11 @@ class Enum(MemStruct):
 
 def init_enum(cls: Type[_t]) -> Type[_t]:
     cls._value_name_map = {}
+    cls._name_value_map = {}
     attrs = {'_fields_': [('value', cls._type_)]}
     for k, v in cls.__dict__.items():
         if isinstance(v, Enumerate):
             cls._value_name_map[v.value] = k
+            cls._name_value_map[k] = v.value
             attrs[k] = v.value
     return type(cls.__name__, (cls,), attrs)

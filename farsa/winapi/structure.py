@@ -576,17 +576,27 @@ class SYSTEM_HANDLE(ctypes.Structure):
 
 
 class MODULEENTRY32(ctypes.Structure):
-    __fields__ = [
-        [
-            ('dwSize', ctypes.c_ulong),
-            ('th32ModuleID', ctypes.c_ulong),
-            ('th32ProcessID', ctypes.c_ulong),
-            ('GlblcntUsage', ctypes.c_ulong),
-            ('ProccntUsage', ctypes.c_ulong),
-            ('modBaseAddr', ctypes.c_void_p),
-            ('modBaseSize', ctypes.c_ulong),
-            ('hModule', ctypes.c_void_p),
-            ('szModule', ctypes.c_char * 256),
-            ('szExePath', ctypes.c_char * 260)
-        ]
+    _fields_ = [
+        ('dwSize', ctypes.c_ulong),
+        ('th32ModuleID', ctypes.c_ulong),
+        ('th32ProcessID', ctypes.c_ulong),
+        ('GlblcntUsage', ctypes.c_ulong),
+        ('ProccntUsage', ctypes.c_ulong),
+        ('modBaseAddr', ctypes.c_void_p),
+        ('modBaseSize', ctypes.c_ulong),
+        ('hModule', ctypes.c_void_p),
+        ('szModule', ctypes.c_char * 256),
+        ('szExePath', ctypes.c_char * 260)
     ]
+
+
+class PROCESS_BASIC_INFORMATION(ctypes.Structure):
+    _fields_ = [
+        ('ExitStatus', ctypes.c_ulong),
+        ('PebBaseAddress', ctypes.c_void_p),
+        ('AffinityMask', ctypes.c_ulong),
+        ('BasePriority', ctypes.c_ulong),
+        ('UniqueProcessId', ctypes.c_ulong),
+        ('InheritedFromUniqueProcessId', ctypes.c_ulong),
+    ]
+
