@@ -1,5 +1,6 @@
 import threading
 import time
+import traceback
 
 
 class allow_hook:
@@ -40,10 +41,32 @@ def wait_until(func, timeout=-1, interval=0.1, *args, **kwargs):
 
 class Counter:
     def __init__(self, start=0):
-        self.count = start-1
+        self.count = start - 1
         self.lock = threading.Lock()
 
     def get(self):
         with self.lock:
             self.count += 1
             return self.count
+
+
+def try_run(try_count, exception_type=Exception, print_traceback=2, print_func=print):
+    def dec(func):
+        def wrapper(*args, **kwargs):
+            _try_count = try_count
+            while _try_count > 0:
+                try:
+                    return func(*args, **kwargs)
+                except exception_type as e:
+                    _try_count -= 1
+                    if _try_count:
+                        if print_traceback > 1:
+                            print_func(f"error: {e}\n{traceback.format_exc()}")
+                        if print_traceback > 0:
+                            print_func(f"retry {_try_count} times...")
+                    else:
+                        raise
+
+        return wrapper
+
+    return dec
