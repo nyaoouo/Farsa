@@ -16,9 +16,9 @@ def sig_to_pattern(sig: str):
     wild_card_counter = 0
     offset = []
     i = 0
-    for i, s in enumerate(sig.split(' ')):
+    for i, s in enumerate(sig.strip().split(' ')):
         if not s:
-            raise Exception(f'Bad at sig[{i}]')
+            continue
         if s.startswith('*'):
             if not flag1:
                 ans += wild_card(wild_card_counter)
@@ -52,11 +52,12 @@ special_chars_map = {i for i in b'()[]{}?*+-|^$\\.&~# \t\n\r\v\f'}
 
 
 class StaticPatternSearcher:
-    def __init__(self, pe):
+    def __init__(self, pe, base_address=0):
         self.pe = pe
         self.text_sections = [sect for sect in self.pe.sections if sect.Name.rstrip(b'\0') == b'.text']
-        self.section_datas = [sect.get_data() for sect in self.pe.sections]
-        self.section_virtual_addresses = [sect.VirtualAddress for sect in self.pe.sections]
+        self.section_datas = [sect.get_data() for sect in self.text_sections]
+        self.section_virtual_addresses = [sect.VirtualAddress for sect in self.text_sections]
+        self.base_address = base_address
 
     def search_raw_pattern(self, pattern: bytes):
         res = []
@@ -64,7 +65,7 @@ class StaticPatternSearcher:
             va = self.section_virtual_addresses[i]
             res.extend(
                 (
-                    match.span()[0] + va,
+                    match.span()[0] + va + self.base_address,
                     [int.from_bytes(g, byteorder='little', signed=True) for g in match.groups()]
                 ) for match in re.finditer(bytes(pattern), self.section_datas[i])
             )
@@ -82,6 +83,9 @@ class StaticPatternSearcher:
     def find_point(self, pattern: str):
         return [[address + offset for offset in offsets] for address, offsets in self.search_from_text(pattern)]
 
+    def find_val(self, pattern: str):
+        return self.search_raw_pattern(sig_to_pattern(pattern)[0])
+
+
 class MemoryPatternSearcher:
     pass
-

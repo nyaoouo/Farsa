@@ -138,8 +138,11 @@ def write_float(handle, address: int, value: float | int) -> float:
     return write_memory(handle, address, c_float(value)).value
 
 
-def read_string(handle, address: int, max_length: int = 255, encoding='utf-8') -> str:
-    return read_bytes(handle, address, max_length).decode(encoding)
+def read_string(handle, address: int, max_length: int = 255, encoding='utf-8') -> str | bytearray:
+    res = read_bytes(handle, address, max_length)
+    if encoding:
+        return res.rstrip(b'\0').decode(encoding, 'ignore')
+    return res
 
 
 def write_string(handle, address: int, value: str | bytearray | bytes) -> bytearray:
@@ -155,9 +158,8 @@ def read_string_safe(handle, address: int, max_length: int = 255, encoding='utf-
             new_byte = read_ubyte(handle, address + i)
         except WinAPIError:
             break
+        if not new_byte: break
         data.append(new_byte)
-        if not new_byte:
-            break
     return data.decode(encoding)
 
 

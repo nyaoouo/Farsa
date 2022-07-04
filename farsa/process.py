@@ -1,9 +1,17 @@
 import ctypes
+import locale
 import os
 from functools import cached_property
 from inspect import isclass
 from typing import TypeVar, Type, Tuple
-from chardet import detect
+
+try:
+    from chardet import detect
+except ImportError:
+    use_chardet = False
+    detect = None
+else:
+    use_chardet = True
 from .pefile import PE
 from .winapi import kernel32, structure
 from .utils import process, memory, network, injection
@@ -28,15 +36,20 @@ class ModuleInfo:
 
     @cached_property
     def pattern_scanner(self):
-        return StaticPatternSearcher(self.pe)
+        return StaticPatternSearcher(self.pe,self.base_address)
 
     @cached_property
     def pe(self):
         return PE(self.file_path, fast_load=True)
 
-    @cached_property
-    def file_path(self) -> str:
-        return self._module_info.filename.decode(detect(self._module_info.filename)['encoding'])
+    if use_chardet:
+        @cached_property
+        def file_path(self) -> str:
+            return self._module_info.filename.decode(detect(self._module_info.filename)['encoding'])
+    else:
+        @cached_property
+        def file_path(self) -> str:
+            return self._module_info.filename.decode(locale.getpreferredencoding())
 
     @property
     def base_address(self) -> int:
