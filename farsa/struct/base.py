@@ -18,7 +18,7 @@ def import_type(type_str):
     d_type = import_module(module_name)
     # for k in attr_name.split('.'): d_type = getattr(d_type, k)
     d_type = eval(attr_name, globals() | d_type.__dict__)
-    assert inspect.isclass(d_type), f'{d_type} is not a class'
+    assert inspect.isclass(d_type), TypeError(f'{d_type} is not a class')
     return d_type
 
 
@@ -57,7 +57,7 @@ class MemStruct(ctypes.Structure):
         pass
 
     def __rshift__(self, other: Type[_t]) -> _t:
-        return ctypes.cast(ctypes.addressof(self), other)[0]
+        return other.from_address(ctypes.addressof(self))
 
     def __str__(self):
         return str(self.get_data())
@@ -101,21 +101,22 @@ class Field:
                 self._mode = 1
             elif issubclass(self._real_d_type, _ctypes.Array):
                 if self._real_d_type._type_ == ctypes.c_char or self._real_d_type._type_ == ctypes.c_wchar:
-                    self._mode = 2
-                elif ctypes.sizeof(self._real_d_type._type_) == 1:
-                    self._real_d_type = ctypes.c_char * ctypes.sizeof(self._real_d_type)
-                    self._mode = 2
+                    self._mode = 2  # is bytes
+                # elif ctypes.sizeof(self._real_d_type._type_) == 1:
+                #     self._real_d_type = ctypes.c_char * ctypes.sizeof(self._real_d_type)
+                #     self._mode = 2  # is bytes
                 else:
-                    self._mode = 3
+                    self._mode = 3  # is data array
+            elif issubclass(self._real_d_type, _ctypes._SimpleCData):
+                self._mode = 4  # is simple data
             else:
                 self._mode = 0
         return self._real_d_type
 
     def __get__(self, instance: MemStruct, owner) -> _t:
         if instance is None: return self
-        t = ctypes.cast(ctypes.addressof(instance) + self.offset, ctypes.POINTER(self.d_type))[0]
-        if self._mode == 2:
-            return t.value
+        t = self.d_type.from_address(ctypes.addressof(instance) + self.offset)
+        if self._mode == 2 or self._mode == 4: return t.value
         return t
 
     def __set__(self, instance: MemStruct, value: _t) -> None:

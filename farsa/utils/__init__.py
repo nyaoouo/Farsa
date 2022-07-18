@@ -70,3 +70,7 @@ def try_run(try_count, exception_type=Exception, print_traceback=2, print_func=p
         return wrapper
 
     return dec
+
+
+def arr_to_bytes(arr):
+    return bytes(arr).split(b'\0', 1)[0]

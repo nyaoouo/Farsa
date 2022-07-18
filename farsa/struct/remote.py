@@ -232,12 +232,12 @@ def update_remote_struct_buffer(remote_struct: RemoteMemStruct):
         raise WinAPIError(kernel32.GetLastError(), "ReadProcessMemory")
 
 
-def to_remote_type(t: Type[_t], force_array=False) -> Type[_t]:
+def to_remote_type(t: Type[_t]) -> Type[_t]:
     if isclass(t):
         if issubclass(t, RemoteMemStruct):
             return t
         elif issubclass(t, _ctypes.Array):
-            if not force_array and not issubclass(t._type_, (MemStruct, _ctypes.Array, _ctypes._Pointer)): return t
+            if issubclass(t._type_, _ctypes._SimpleCData): return t
             return RemoteArray.create_cls(to_remote_type(t._type_), t._length_)
         elif issubclass(t, _ctypes._Pointer):
             return type(t.__name__, (RemotePointer,), {'_type_': to_remote_type(t._type_)})

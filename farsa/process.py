@@ -100,7 +100,7 @@ class Process:
         return self.write(*item, value)
 
     def read(self, d_type: Type[_t], address: int) -> _t:
-        _d_type = to_remote_type(d_type, True)
+        _d_type = to_remote_type(d_type)
         if isclass(_d_type) and issubclass(_d_type, RemoteMemStruct):
             return _d_type(remote=Remote(self, address))
         return memory.read_memory(self.handle, d_type, address)
