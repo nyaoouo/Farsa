@@ -158,13 +158,12 @@ class ShiftField(Field):
 
     def __get__(self, instance: MemStruct, owner) -> _t:
         if instance is None: return self
-        v = ctypes.cast(ctypes.addressof(instance) + self.offset, ctypes.POINTER(self.d_type)).contents.value
-        return v >> self.shifts & self.d_type._mask_
+        return self.d_type.from_address(ctypes.addressof(instance) + self.offset).value >> self.shifts & self.d_type._mask_
 
     def __set__(self, instance: MemStruct, value: _t) -> None:
         if instance is None: return
-        ptr = ctypes.cast(ctypes.addressof(instance) + self.offset, ctypes.POINTER(self.d_type))
-        ptr.contents.value = (ptr.contents.value & ~(self.d_type._mask_ << self.shifts)) | (value << self.shifts)
+        v = self.d_type.from_address(ctypes.addressof(instance) + self.offset)
+        v.value = (v.value & ~(self.d_type._mask_ << self.shifts)) | (value << self.shifts)
 
 
 def field(d_type: Type[_t] | str, offset: int | None = None, shifts=0) -> _t:
