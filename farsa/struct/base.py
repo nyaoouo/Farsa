@@ -325,6 +325,10 @@ class Enum(MemStruct):
     def get_name(cls, value):
         return cls._value_name_map.get(value, value)
 
+    @classmethod
+    def get_value(cls, name):
+        return cls._name_value_map.get(name, 0)
+
     @property
     def name(self):
         return self.get_name(self.value)
