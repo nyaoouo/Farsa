@@ -74,3 +74,30 @@ def try_run(try_count, exception_type=Exception, print_traceback=2, print_func=p
 
 def arr_to_bytes(arr):
     return bytes(arr).split(b'\0', 1)[0]
+
+
+def byte_list_flag_set(byte_list, idx, val, item_size=8):
+    if val:
+        byte_list[idx // item_size] |= 1 << (idx % item_size)
+    else:
+        byte_list[idx // item_size] &= ~(1 << (idx % item_size))
+
+
+def byte_list_flag_get(byte_list, idx, item_size=8):
+    return (byte_list[idx // item_size] & 1 << (idx % item_size)) > 0
+
+
+def bit_field_iter(flag):
+    i = 0
+    while flag:
+        if flag & 1: yield i
+        flag >>= 1
+        i += 1
+
+
+def bit_field_count(flag):
+    i = 0
+    while flag:
+        if flag & 1: i += 1
+        flag >>= 1
+    return i

@@ -346,6 +346,11 @@ class Enum(MemStruct):
         if isinstance(v, Enum): v = v.value
         self.value = self._name_value_map.get(v, v)
 
+    @classmethod
+    def iter(cls):
+        for name, value in cls._name_value_map.items():
+            yield name, value
+
 
 def init_enum(cls: Type[_t]) -> Type[_t]:
     cls._value_name_map = {}
