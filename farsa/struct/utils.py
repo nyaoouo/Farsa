@@ -1,6 +1,8 @@
 import ctypes
+import functools
 import inspect
 from importlib import import_module
+
 
 @functools.cache
 def import_type(type_str: str | bytes):

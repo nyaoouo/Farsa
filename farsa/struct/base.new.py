@@ -6,13 +6,8 @@ from .field import Field
 _t = TypeVar('_t')
 
 
-def set_cdata_type_size(type_, new_size):
-    # black magic only tested in python 3.10 win 64 bit
-    ctypes.c_int64.from_address(ctypes.c_int64.from_address(id(type_) + 0x108).value + 0x30).value = new_size
-
-
 class MemStruct(ctypes.Structure):
-    _size_: int
+    _size_: int = 0
     _fields_ = []
 
     if TYPE_CHECKING:
@@ -28,3 +23,25 @@ class MemStruct(ctypes.Structure):
 
     def __rshift__(self, other: Type[_t]) -> _t:
         return other.from_address(ctypes.addressof(self))
+
+
+class AutoMemStruct(MemStruct):
+    def __init_subclass__(cls):
+        size = 0
+        for name, attr in cls.__dict__.items():
+            if isinstance(attr, Field):
+                if attr.offset is None: attr.offset = size
+                size = max(size, attr.offset + ctypes.sizeof(attr.d_type))
+        setattr(cls, '_size_', size)
+        super().__init_subclass__()
+
+
+def set_cdata_type_size(type_, new_size):
+    # black magic only tested in python 3.10 win 64 bit
+    ctypes.c_int64.from_address(ctypes.c_int64.from_address(id(type_) + 0x108).value + 0x30).value = new_size
+
+
+def init_mem_struct(cls: Type[_t]) -> Type[_t]:
+    set_cdata_type_size(cls, cls._size_)
+    return cls
+    # return type(cls.__name__, (ctypes.c_char * cls._size_, cls), {})
