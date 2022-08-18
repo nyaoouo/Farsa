@@ -1,9 +1,9 @@
-import enum
 import functools
 import ctypes, _ctypes
 import copy
 from typing import TypeVar, Type, Generic
 from .utils import import_type
+from .enum import Enum
 
 _t = TypeVar('_t')
 
@@ -11,7 +11,7 @@ _t = TypeVar('_t')
 @functools.cache
 def parse_type(type_):
     if isinstance(type_, str): return parse_type(import_type(type_))
-    if issubclass(type_, enum.Enum): return type_, enum_get, enum_set
+    if issubclass(type_, Enum): return type_, default_get, enum_set
     if issubclass(type_, _ctypes._SimpleCData): return type_, simple_c_get, simple_c_set
     if issubclass(type_, _ctypes.Array):
         if type_ == ctypes.c_char or type_ == ctypes.c_wchar: return type_, simple_c_get, simple_c_set
@@ -25,10 +25,7 @@ def default_get(type_, address): return type_.from_address(address)
 def default_set(type_, address, val): ctypes.cast(address, ctypes.POINTER(type_))[0] = val
 
 
-def enum_get(type_, address): return type_(ctypes.c_int.from_address(address).value)
-
-
-def enum_set(type_, address, val):  ctypes.c_int.from_address(address).value = val.value if isinstance(val, enum.Enum) else val
+def enum_set(type_, address, val):  type_._base_.from_address(address).value = val.value if isinstance(val, Enum) else val
 
 
 def simple_c_get(type_, address): return type_.from_address(address).value
@@ -61,6 +58,7 @@ class Field(FieldBase[_t]):
     def __init__(self, d_type: Type[_t] | str, offset: int | None = None):
         self._d_type = d_type
         self.offset = offset
+        self.name = None
 
     def init_type(self):
         self._real_d_type, self._getter, self._setter = res = parse_type(self._d_type)
@@ -77,6 +75,19 @@ class Field(FieldBase[_t]):
     def __set__(self, instance, value: _t) -> None:
         if instance is None: return
         return self.setter(self.d_type, ctypes.addressof(instance) + self.offset, value)
+
+    def __set_name__(self, owner, name):
+        owner._m_fields_[name] = self
+        self.name = name
+
+    def __add__(self, other: int):
+        f = copy.deepcopy(self)
+        f.offset += other
+        return f
+
+
+def field(tp: Type[_t] | str, offset=None) -> _t:
+    return Field(tp, offset)
 
 
 class BitField(FieldBase[int]):
