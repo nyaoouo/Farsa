@@ -1,6 +1,9 @@
 import threading
 import time
 import traceback
+import typing
+
+_T = typing.TypeVar('_T')
 
 
 class allow_hook:
@@ -101,3 +104,20 @@ def bit_field_count(flag):
         if flag & 1: i += 1
         flag >>= 1
     return i
+
+
+class LazyLoad(typing.Generic[_T]):
+    def __init__(self, func: typing.Callable[[typing.Any], _T]):
+        self.func = func
+        self.name = None
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner) -> _T:
+        setattr(owner, self.name, (res := self.func(owner)))
+        return res
+
+
+def lazy_load(func: typing.Callable[[typing.Any], _T]) -> _T: return LazyLoad(func)
+
