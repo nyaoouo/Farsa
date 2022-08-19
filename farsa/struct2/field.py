@@ -39,6 +39,7 @@ def array_set(type_, address, val): type_.from_address(address)[:len(val)] = val
 
 class FieldBase(Generic[_t]):
     offset: int
+    name: str
 
     def __get__(self, instance, owner) -> _t: ...
 
@@ -49,6 +50,10 @@ class FieldBase(Generic[_t]):
         new_f.offset += offset
         return new_f
 
+    def __set_name__(self, owner, name):
+        owner._m_fields_[name] = self
+        self.name = name
+
 
 class Field(FieldBase[_t]):
     _real_d_type = None
@@ -58,7 +63,6 @@ class Field(FieldBase[_t]):
     def __init__(self, d_type: Type[_t] | str, offset: int | None = None):
         self._d_type = d_type
         self.offset = offset
-        self.name = None
 
     def init_type(self):
         self._real_d_type, self._getter, self._setter = res = parse_type(self._d_type)
@@ -75,15 +79,6 @@ class Field(FieldBase[_t]):
     def __set__(self, instance, value: _t) -> None:
         if instance is None: return
         return self.setter(self.d_type, ctypes.addressof(instance) + self.offset, value)
-
-    def __set_name__(self, owner, name):
-        owner._m_fields_[name] = self
-        self.name = name
-
-    def __add__(self, other: int):
-        f = copy.deepcopy(self)
-        f.offset += other
-        return f
 
 
 def field(tp: Type[_t] | str, offset=None) -> _t:
