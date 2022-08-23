@@ -14,7 +14,7 @@ class EnumMeta(type(ctypes.Structure)):
     def __new__(cls, name, bases, namespace, **kwargs):
         try:
             if Enum in bases:
-                namespace['_fields_'] = [('value', namespace['_base_'])]
+                namespace['_fields_'] = [('value', namespace.get('_base_', Enum._base_))]
         except NameError:
             pass
         return super().__new__(cls, name, bases, namespace, **kwargs)
@@ -84,15 +84,23 @@ class Enum(ctypes.Structure, metaclass=EnumMeta):
 
 
 class Enumerate:
-    def __init__(self, value):
+    def __init__(self, value=None):
         self.value = value
         self.name = ''
         self.class_name = ''
 
     def __set_name__(self, owner: Enum, name):
+        if self.name: return
         self.class_name = owner.__class__.__name__
         self.name = name
-        owner._name_map[self.value] = name
+        if self.value is None:
+            if values := list(owner._value_map.values()):
+                self.value = values[-1] + 1
+            else:
+                self.value = 0
+        if isinstance(self.value, Enumerate):
+            self.value = self.value.value
+        owner._name_map.setdefault(self.value, name)
         owner._value_map[name] = self.value
         owner._default_name = name
         owner._default_value = self.value
